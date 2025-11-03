@@ -1,9 +1,9 @@
-// lib/screens/home_screen.dart (Premium Edition - Fixed)
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'pushup_screen.dart';
+import '../utils/app_colors.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,6 +19,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
+
+  final List<Color> avatarColors = [
+    const Color(0xFFFF6B6B),
+    const Color(0xFF4ECDC4),
+    const Color(0xFFFFE66D),
+    const Color(0xFF95E1D3),
+    const Color(0xFFF38181),
+    const Color(0xFFAA96DA),
+    const Color(0xFFFCBF49),
+    const Color(0xFF06FFA5),
+  ];
   
   @override
   void initState() {
@@ -72,25 +83,41 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
   }
 
+  String _getInitials(String name) {
+    List<String> names = name.trim().split(' ');
+    if (names.length == 1) {
+      return names[0].substring(0, math.min(2, names[0].length)).toUpperCase();
+    } else {
+      return (names[0][0] + names[1][0]).toUpperCase();
+    }
+  }
+
+  Color _getAvatarColor(String name) {
+    int index = name.codeUnitAt(0) % avatarColors.length;
+    return avatarColors[index];
+  }
+
   @override
   Widget build(BuildContext context) {
     final User? user = _auth.currentUser;
     final userName = _userData?['name'] ?? user?.displayName ?? 'User';
+    final userInitials = _getInitials(userName);
+    final avatarColor = _getAvatarColor(userName);
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.background(context),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadUserData,
-          color: Colors.white,
-          backgroundColor: Colors.grey[900],
+          color: AppColors.primaryText(context),
+          backgroundColor: AppColors.cardBackground(context),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header dengan foto profil
+                // Header
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -102,7 +129,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             '${_getGreeting()} 👋',
                             style: TextStyle(
                               fontSize: 18,
-                              color: Colors.grey[500],
+                              color: AppColors.secondaryText(context),
                               fontWeight: FontWeight.w400,
                             ),
                           ),
@@ -112,16 +139,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                   width: 150,
                                   height: 28,
                                   decoration: BoxDecoration(
-                                    color: Colors.grey[850],
+                                    color: AppColors.cardBackground(context),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                 )
                               : Text(
                                   userName,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 28,
                                     fontWeight: FontWeight.w900,
-                                    color: Colors.white,
+                                    color: AppColors.primaryText(context),
                                     letterSpacing: -0.5,
                                   ),
                                   overflow: TextOverflow.ellipsis,
@@ -134,26 +161,32 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: LinearGradient(
-                          colors: [Colors.white, Colors.grey[400]!],
+                          colors: [
+                            avatarColor.withOpacity(0.8),
+                            avatarColor,
+                          ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
                       ),
                       child: Container(
                         padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.black,
+                          color: AppColors.background(context),
                         ),
                         child: CircleAvatar(
                           radius: 28,
-                          backgroundColor: Colors.grey[800],
-                          backgroundImage: user?.photoURL != null 
-                              ? NetworkImage(user!.photoURL!) 
-                              : null,
-                          child: user?.photoURL == null
-                              ? Icon(Icons.person, color: Colors.grey[600], size: 30)
-                              : null,
+                          backgroundColor: avatarColor,
+                          child: Text(
+                            userInitials,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -162,11 +195,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 
                 const SizedBox(height: 32),
 
-                // Summary Cards dengan data real
+                // Summary Cards
                 Row(
                   children: [
                     Expanded(
                       child: _buildPremiumSummaryCard(
+                        context,
                         icon: Icons.trending_up_rounded,
                         value: _isLoading ? '...' : '${_userData?['totalPushUps'] ?? 0}',
                         label: 'Push Up',
@@ -177,6 +211,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     const SizedBox(width: 16),
                     Expanded(
                       child: _buildPremiumSummaryCard(
+                        context,
                         icon: Icons.track_changes_rounded,
                         value: _isLoading ? '...' : '${_userData?['dailyGoal'] ?? 50}',
                         label: 'Daily Goal',
@@ -189,7 +224,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
                 const SizedBox(height: 32),
 
-                // START Button dengan animasi
+                // START Button
                 if (_pulseController != null)
                   AnimatedBuilder(
                     animation: _pulseController!,
@@ -201,7 +236,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.white.withOpacity(0.1 + (_pulseController!.value * 0.1)),
+                              color: AppColors.isDark(context)
+                                  ? Colors.white.withOpacity(0.1 + (_pulseController!.value * 0.1))
+                                  : Colors.black.withOpacity(0.1 + (_pulseController!.value * 0.1)),
                               blurRadius: 20 + (_pulseController!.value * 10),
                               spreadRadius: 2,
                             ),
@@ -212,19 +249,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     },
                     child: ElevatedButton(
                       onPressed: () {
-                        // TODO: Navigate to pushup screen
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('Push Up screen coming soon!'),
-                            backgroundColor: Colors.grey[800],
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const PushupScreen(),
                           ),
-                        );
+                        ).then((_) {
+                          _loadUserData();
+                        });
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
+                        backgroundColor: AppColors.isDark(context) 
+                            ? Colors.white 
+                            : Colors.black,
+                        foregroundColor: AppColors.isDark(context) 
+                            ? Colors.black 
+                            : Colors.white,
                         padding: EdgeInsets.zero,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -239,18 +279,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: Colors.black,
+                                color: AppColors.isDark(context) 
+                                    ? Colors.black 
+                                    : Colors.white,
                                 borderRadius: BorderRadius.circular(14),
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.play_arrow_rounded,
-                                color: Colors.white,
+                                color: AppColors.isDark(context) 
+                                    ? Colors.white 
+                                    : Colors.black,
                                 size: 32,
                               ),
                             ),
                             const SizedBox(width: 16),
                             const Text(
-                              'START PUSH UP',
+                              'START',
                               style: TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.w900,
@@ -269,10 +313,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       'Recent Activity',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.primaryText(context),
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -0.5,
@@ -283,7 +327,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       child: Text(
                         'See all',
                         style: TextStyle(
-                          color: Colors.grey[500],
+                          color: AppColors.secondaryText(context),
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
@@ -294,8 +338,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
                 const SizedBox(height: 16),
 
-                // History Items (Sample data)
+                // History Items
                 _buildPremiumHistoryItem(
+                  context,
                   date: DateTime.now().day.toString(),
                   month: _getMonthName(DateTime.now().month),
                   status: 'GOOD',
@@ -305,6 +350,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
                 const SizedBox(height: 12),
                 _buildPremiumHistoryItem(
+                  context,
                   date: (DateTime.now().day - 1).toString(),
                   month: _getMonthName(DateTime.now().month),
                   status: 'Excellent',
@@ -314,6 +360,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
                 const SizedBox(height: 12),
                 _buildPremiumHistoryItem(
+                  context,
                   date: (DateTime.now().day - 2).toString(),
                   month: _getMonthName(DateTime.now().month),
                   status: 'Great',
@@ -336,7 +383,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return months[month - 1];
   }
 
-  Widget _buildPremiumSummaryCard({
+  Widget _buildPremiumSummaryCard(
+    BuildContext context, {
     required IconData icon,
     required String value,
     required String label,
@@ -346,9 +394,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.grey[900],
+        color: AppColors.cardBackground(context),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.grey[800]!, width: 1),
+        border: Border.all(color: AppColors.cardBorder(context), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -368,8 +416,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           const SizedBox(height: 20),
           Text(
             value,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: AppColors.primaryText(context),
               fontSize: 28,
               fontWeight: FontWeight.w900,
               letterSpacing: -0.5,
@@ -379,7 +427,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           Text(
             label,
             style: TextStyle(
-              color: Colors.grey[400],
+              color: AppColors.secondaryText(context),
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
@@ -387,7 +435,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           Text(
             subtitle,
             style: TextStyle(
-              color: Colors.grey[600],
+              color: AppColors.tertiaryText(context),
               fontSize: 12,
             ),
           ),
@@ -396,7 +444,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildPremiumHistoryItem({
+  Widget _buildPremiumHistoryItem(
+    BuildContext context, {
     required String date,
     required String month,
     required String status,
@@ -407,20 +456,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.grey[900],
+        color: AppColors.cardBackground(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey[800]!, width: 1),
+        border: Border.all(color: AppColors.cardBorder(context), width: 1),
       ),
       child: Row(
         children: [
-          // Date Box
           Container(
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: Colors.grey[850],
+              color: AppColors.inputBackground(context),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey[800]!, width: 1),
+              border: Border.all(color: AppColors.cardBorder(context), width: 1),
             ),
             child: Center(
               child: Column(
@@ -428,8 +476,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 children: [
                   Text(
                     date,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: AppColors.primaryText(context),
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
                     ),
@@ -437,7 +485,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   Text(
                     month,
                     style: TextStyle(
-                      color: Colors.grey[500],
+                      color: AppColors.secondaryText(context),
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
@@ -449,15 +497,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           
           const SizedBox(width: 16),
           
-          // Status and Value
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   status,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: AppColors.primaryText(context),
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                   ),
@@ -466,7 +513,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 Text(
                   value,
                   style: TextStyle(
-                    color: Colors.grey[500],
+                    color: AppColors.secondaryText(context),
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
@@ -475,7 +522,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
           ),
           
-          // Duration Badge
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(

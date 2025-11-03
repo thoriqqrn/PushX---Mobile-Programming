@@ -1,10 +1,9 @@
-// lib/screens/main_screen.dart (Premium Edition dengan Curved Navbar)
-
 import 'package:flutter/material.dart';
 import 'package:pushup/screens/home_screen.dart';
 import 'package:pushup/screens/news_screen.dart';
 import 'package:pushup/screens/profile_screen.dart';
 import 'package:pushup/screens/pushup_screen.dart';
+import '../utils/app_colors.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -55,19 +54,26 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = AppColors.isDark(context);
+    
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.background(context),
       body: _pages[_selectedIndex],
       extendBody: true,
       bottomNavigationBar: Container(
         margin: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.grey[900],
+          color: AppColors.cardBackground(context),
           borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: Colors.grey[800]!, width: 1),
+          border: Border.all(
+            color: AppColors.cardBorder(context),
+            width: 1,
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.5),
+              color: isDark 
+                  ? Colors.black.withOpacity(0.5)
+                  : Colors.black.withOpacity(0.1),
               blurRadius: 30,
               offset: const Offset(0, 10),
             ),
@@ -78,24 +84,28 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
           child: BottomNavigationBar(
             items: [
               _buildNavItem(
+                context: context,
                 icon: Icons.home_outlined,
                 activeIcon: Icons.home_rounded,
                 label: 'Home',
                 index: 0,
               ),
               _buildNavItem(
+                context: context,
                 icon: Icons.fitness_center_outlined,
                 activeIcon: Icons.fitness_center_rounded,
                 label: 'Push Up',
                 index: 1,
               ),
               _buildNavItem(
+                context: context,
                 icon: Icons.article_outlined,
                 activeIcon: Icons.article_rounded,
                 label: 'News',
                 index: 2,
               ),
               _buildNavItem(
+                context: context,
                 icon: Icons.person_outline_rounded,
                 activeIcon: Icons.person_rounded,
                 label: 'Profile',
@@ -106,8 +116,8 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
             onTap: _onItemTapped,
             backgroundColor: Colors.transparent,
             type: BottomNavigationBarType.fixed,
-            selectedItemColor: Colors.white,
-            unselectedItemColor: Colors.grey[600],
+            selectedItemColor: isDark ? Colors.white : Colors.black,
+            unselectedItemColor: AppColors.secondaryText(context),
             showSelectedLabels: true,
             showUnselectedLabels: true,
             selectedFontSize: 12,
@@ -127,12 +137,14 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   }
 
   BottomNavigationBarItem _buildNavItem({
+    required BuildContext context,
     required IconData icon,
     required IconData activeIcon,
     required String label,
     required int index,
   }) {
     final isSelected = _selectedIndex == index;
+    final isDark = AppColors.isDark(context);
     
     return BottomNavigationBarItem(
       icon: AnimatedContainer(
@@ -140,12 +152,16 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         curve: Curves.easeInOut,
         padding: EdgeInsets.all(isSelected ? 12 : 8),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
+          color: isSelected 
+              ? (isDark ? Colors.white : Colors.black)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: Colors.white.withOpacity(0.3),
+                    color: isDark
+                        ? Colors.white.withOpacity(0.3)
+                        : Colors.black.withOpacity(0.2),
                     blurRadius: 15,
                     spreadRadius: 2,
                   ),
@@ -155,7 +171,9 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         child: Icon(
           isSelected ? activeIcon : icon,
           size: 24,
-          color: isSelected ? Colors.black : Colors.grey[600],
+          color: isSelected 
+              ? (isDark ? Colors.black : Colors.white)
+              : AppColors.secondaryText(context),
         ),
       ),
       label: label,

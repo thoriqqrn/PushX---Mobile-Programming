@@ -1,12 +1,10 @@
-// lib/screens/profile_screen.dart (Fully Functional Edition)
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'dart:io'; // Untuk bekerja dengan File
-import 'package:image_picker/image_picker.dart'; // Untuk mengambil gambar
-import 'package:firebase_storage/firebase_storage.dart'; // Untuk upload ke Firebase Storage
+import 'package:provider/provider.dart';
 import 'dart:math' as math;
+import '../utils/theme_provider.dart';
+import '../utils/app_colors.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -24,7 +22,16 @@ class _ProfileScreenState extends State<ProfileScreen>
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
 
-  bool _isUploading = false; // <-- TAMBAHKAN INI
+  final List<Color> avatarColors = [
+    const Color(0xFFFF6B6B),
+    const Color(0xFF4ECDC4),
+    const Color(0xFFFFE66D),
+    const Color(0xFF95E1D3),
+    const Color(0xFFF38181),
+    const Color(0xFFAA96DA),
+    const Color(0xFFFCBF49),
+    const Color(0xFF06FFA5),
+  ];
 
   @override
   void initState() {
@@ -43,64 +50,18 @@ class _ProfileScreenState extends State<ProfileScreen>
     super.dispose();
   }
 
-  Future<void> _pickAndUploadImage(ImageSource source) async {
-    final imagePicker = ImagePicker();
-    // 1. Pilih gambar
-    final pickedFile = await imagePicker.pickImage(source: source);
-
-    if (pickedFile == null) return; // Pengguna membatalkan pemilihan
-
-    final file = File(pickedFile.path);
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    setState(() {
-      _isUploading = true;
-    });
-
-    try {
-      // 2. Buat path unik di Firebase Storage
-      final filePath = 'profile_pictures/${user.uid}.jpg';
-      final ref = FirebaseStorage.instance.ref().child(filePath);
-
-      // 3. Upload file
-      final uploadTask = ref.putFile(file);
-      final snapshot = await uploadTask.whenComplete(() {});
-
-      // 4. Dapatkan URL download
-      final downloadUrl = await snapshot.ref.getDownloadURL();
-
-      // 5. Update URL di Firebase Auth
-      await user.updatePhotoURL(downloadUrl);
-
-      // 6. Update URL di Firestore
-      await _firestore.collection('users').doc(user.uid).update({
-        'photoURL': downloadUrl,
-      });
-
-      // 7. Muat ulang data & UI
-      await _loadUserData();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profile picture updated!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to upload image: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isUploading = false;
-        });
-      }
+  String _getInitials(String name) {
+    List<String> names = name.trim().split(' ');
+    if (names.length == 1) {
+      return names[0].substring(0, math.min(2, names[0].length)).toUpperCase();
+    } else {
+      return (names[0][0] + names[1][0]).toUpperCase();
     }
+  }
+
+  Color _getAvatarColor(String name) {
+    int index = name.codeUnitAt(0) % avatarColors.length;
+    return avatarColors[index];
   }
 
   Future<void> _loadUserData() async {
@@ -114,7 +75,6 @@ class _ProfileScreenState extends State<ProfileScreen>
             _isLoading = false;
           });
         } else {
-          // Create default user data if not exists
           await _firestore.collection('users').doc(user.uid).set({
             'name': user.displayName ?? 'User',
             'email': user.email,
@@ -140,14 +100,22 @@ class _ProfileScreenState extends State<ProfileScreen>
     final User? user = _auth.currentUser;
 
     if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(child: CircularProgressIndicator(color: Colors.white)),
+      return Scaffold(
+        backgroundColor: AppColors.background(context),
+        body: Center(
+          child: CircularProgressIndicator(
+            color: AppColors.primaryText(context),
+          ),
+        ),
       );
     }
 
+    final userName = _userData?['name'] ?? user?.displayName ?? 'User';
+    final userInitials = _getInitials(userName);
+    final avatarColor = _getAvatarColor(userName);
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.background(context),
       body: Stack(
         children: [
           // Animated background decoration
@@ -167,7 +135,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
-                            Colors.white.withOpacity(0.03),
+                            AppColors.primaryText(context).withOpacity(0.03),
                             Colors.transparent,
                           ],
                         ),
@@ -181,8 +149,8 @@ class _ProfileScreenState extends State<ProfileScreen>
           SafeArea(
             child: RefreshIndicator(
               onRefresh: _loadUserData,
-              color: Colors.white,
-              backgroundColor: Colors.grey[900],
+              color: AppColors.primaryText(context),
+              backgroundColor: AppColors.cardBackground(context),
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(24.0),
@@ -192,12 +160,12 @@ class _ProfileScreenState extends State<ProfileScreen>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
+                        Text(
                           'Profile',
                           style: TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.w900,
-                            color: Colors.white,
+                            color: AppColors.primaryText(context),
                             letterSpacing: -1,
                           ),
                         ),
@@ -208,16 +176,16 @@ class _ProfileScreenState extends State<ProfileScreen>
                           icon: Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: Colors.grey[900],
+                              color: AppColors.cardBackground(context),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: Colors.grey[800]!,
+                                color: AppColors.cardBorder(context),
                                 width: 1,
                               ),
                             ),
                             child: Icon(
                               Icons.notifications_outlined,
-                              color: Colors.grey[400],
+                              color: AppColors.secondaryText(context),
                               size: 22,
                             ),
                           ),
@@ -235,108 +203,45 @@ class _ProfileScreenState extends State<ProfileScreen>
                       builder: (context, double value, child) {
                         return Transform.scale(
                           scale: value,
-                          child: GestureDetector(
-                            onTap: _isUploading
-                                ? null
-                                : () {
-                                    // Nonaktifkan tap saat uploading
-                                    _showProfilePictureOptions(context);
-                                  },
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                // Konten Stack yang sudah ada (foto profil, border, ikon kamera)
-                                Stack(
-                                  children: [
-                                    // ... (Container dengan gradient, Container dengan warna hitam, CircleAvatar)
-                                    // Kode ini persis seperti yang Anda miliki sebelumnya
-                                    Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            Colors.white,
-                                            Colors.grey[600]!,
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.white.withOpacity(
-                                              0.3,
-                                            ),
-                                            blurRadius: 30,
-                                            spreadRadius: 5,
-                                          ),
-                                        ],
-                                      ),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(4),
-                                        decoration: const BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: Colors.black,
-                                        ),
-                                        child: CircleAvatar(
-                                          radius: 60,
-                                          backgroundColor: Colors.grey[850],
-                                          backgroundImage:
-                                              _userData?['photoURL'] != null
-                                              ? NetworkImage(
-                                                  _userData!['photoURL'],
-                                                )
-                                              : null,
-                                          child: _userData?['photoURL'] == null
-                                              ? Icon(
-                                                  Icons.person_rounded,
-                                                  size: 60,
-                                                  color: Colors.grey[600],
-                                                )
-                                              : null,
-                                        ),
-                                      ),
-                                    ),
-                                    Positioned(
-                                      bottom: 0,
-                                      right: 0,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: Colors.black,
-                                            width: 3,
-                                          ),
-                                        ),
-                                        child: const Icon(
-                                          Icons.camera_alt_rounded,
-                                          color: Colors.black,
-                                          size: 18,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [
+                                  avatarColor.withOpacity(0.8),
+                                  avatarColor,
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: avatarColor.withOpacity(0.4),
+                                  blurRadius: 30,
+                                  spreadRadius: 5,
                                 ),
-
-                                // --- TAMBAHKAN LOGIKA LOADING DI SINI ---
-                                if (_isUploading)
-                                  Container(
-                                    width:
-                                        136, // Sesuaikan dengan ukuran total avatar
-                                    height: 136,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Colors.black.withOpacity(0.5),
-                                    ),
-                                    child: const Center(
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
                               ],
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppColors.background(context),
+                              ),
+                              child: CircleAvatar(
+                                radius: 60,
+                                backgroundColor: avatarColor,
+                                child: Text(
+                                  userInitials,
+                                  style: const TextStyle(
+                                    fontSize: 40,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                    letterSpacing: -1,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         );
@@ -347,11 +252,11 @@ class _ProfileScreenState extends State<ProfileScreen>
 
                     // Name
                     Text(
-                      _userData?['name'] ?? user?.displayName ?? 'User',
-                      style: const TextStyle(
+                      userName,
+                      style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w900,
-                        color: Colors.white,
+                        color: AppColors.primaryText(context),
                         letterSpacing: -0.5,
                       ),
                     ),
@@ -365,16 +270,19 @@ class _ProfileScreenState extends State<ProfileScreen>
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.grey[900],
+                        color: AppColors.cardBackground(context),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.grey[800]!, width: 1),
+                        border: Border.all(
+                          color: AppColors.cardBorder(context),
+                          width: 1,
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
                             Icons.email_outlined,
-                            color: Colors.grey[600],
+                            color: AppColors.tertiaryText(context),
                             size: 16,
                           ),
                           const SizedBox(width: 8),
@@ -382,7 +290,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                             user?.email ?? 'email@example.com',
                             style: TextStyle(
                               fontSize: 14,
-                              color: Colors.grey[400],
+                              color: AppColors.secondaryText(context),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -397,6 +305,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       children: [
                         Expanded(
                           child: _buildStatCard(
+                            context,
                             icon: Icons.local_fire_department_rounded,
                             value: '${_userData?['totalPushUps'] ?? 0}',
                             label: 'Total Push Ups',
@@ -409,6 +318,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         const SizedBox(width: 12),
                         Expanded(
                           child: _buildStatCard(
+                            context,
                             icon: Icons.emoji_events_rounded,
                             value: '${_userData?['achievements'] ?? 0}',
                             label: 'Achievements',
@@ -425,6 +335,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
                     // Menu Items
                     _buildPremiumMenuItem(
+                      context,
                       icon: Icons.track_changes_rounded,
                       text: 'Set Goals',
                       subtitle:
@@ -435,6 +346,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     ),
                     const SizedBox(height: 12),
                     _buildPremiumMenuItem(
+                      context,
                       icon: Icons.edit_rounded,
                       text: 'Edit Profile',
                       subtitle: 'Update your personal information',
@@ -444,6 +356,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     ),
                     const SizedBox(height: 12),
                     _buildPremiumMenuItem(
+                      context,
                       icon: Icons.bar_chart_rounded,
                       text: 'Statistics',
                       subtitle: 'View your progress and history',
@@ -452,7 +365,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                       },
                     ),
                     const SizedBox(height: 12),
+                    
+                    // Theme Toggle - FITUR BARU!
+                    _buildThemeToggle(context),
+                    
+                    const SizedBox(height: 12),
                     _buildPremiumMenuItem(
+                      context,
                       icon: Icons.lock_outline_rounded,
                       text: 'Privacy & Security',
                       subtitle: 'Control your privacy settings',
@@ -468,7 +387,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       width: double.infinity,
                       height: 60,
                       decoration: BoxDecoration(
-                        color: Colors.grey[900],
+                        color: AppColors.cardBackground(context),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
                           color: Colors.red.withOpacity(0.3),
@@ -515,7 +434,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       'Version 1.0.0',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey[700],
+                        color: AppColors.tertiaryText(context),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -531,7 +450,8 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildStatCard({
+  Widget _buildStatCard(
+    BuildContext context, {
     required IconData icon,
     required String value,
     required String label,
@@ -540,9 +460,9 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.grey[900],
+        color: AppColors.cardBackground(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey[800]!, width: 1),
+        border: Border.all(color: AppColors.cardBorder(context), width: 1),
       ),
       child: Column(
         children: [
@@ -561,8 +481,8 @@ class _ProfileScreenState extends State<ProfileScreen>
           const SizedBox(height: 12),
           Text(
             value,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: AppColors.primaryText(context),
               fontSize: 22,
               fontWeight: FontWeight.w900,
               letterSpacing: -0.5,
@@ -573,7 +493,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             label,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.grey[500],
+              color: AppColors.secondaryText(context),
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
@@ -583,7 +503,8 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildPremiumMenuItem({
+  Widget _buildPremiumMenuItem(
+    BuildContext context, {
     required IconData icon,
     required String text,
     required String subtitle,
@@ -591,9 +512,9 @@ class _ProfileScreenState extends State<ProfileScreen>
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey[900],
+        color: AppColors.cardBackground(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey[800]!, width: 1),
+        border: Border.all(color: AppColors.cardBorder(context), width: 1),
       ),
       child: Material(
         color: Colors.transparent,
@@ -607,11 +528,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.grey[850],
+                    color: AppColors.inputBackground(context),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.grey[800]!, width: 1),
+                    border: Border.all(
+                      color: AppColors.cardBorder(context),
+                      width: 1,
+                    ),
                   ),
-                  child: Icon(icon, color: Colors.white, size: 22),
+                  child: Icon(
+                    icon,
+                    color: AppColors.primaryText(context),
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -620,8 +548,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                     children: [
                       Text(
                         text,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: AppColors.primaryText(context),
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                         ),
@@ -630,7 +558,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       Text(
                         subtitle,
                         style: TextStyle(
-                          color: Colors.grey[600],
+                          color: AppColors.tertiaryText(context),
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -640,7 +568,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
                 Icon(
                   Icons.arrow_forward_ios_rounded,
-                  color: Colors.grey[600],
+                  color: AppColors.tertiaryText(context),
                   size: 16,
                 ),
               ],
@@ -651,33 +579,148 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  // Edit Profile Dialog
+  // THEME TOGGLE - FITUR BARU!
+  Widget _buildThemeToggle(BuildContext context) {
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return Container(
+          decoration: BoxDecoration(
+            color: AppColors.cardBackground(context),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.cardBorder(context), width: 1),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                themeProvider.toggleTheme();
+              },
+              borderRadius: BorderRadius.circular(20),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.inputBackground(context),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: AppColors.cardBorder(context),
+                          width: 1,
+                        ),
+                      ),
+                      child: Icon(
+                        themeProvider.isDarkMode
+                            ? Icons.dark_mode_rounded
+                            : Icons.light_mode_rounded,
+                        color: themeProvider.isDarkMode
+                            ? Colors.white
+                            : Colors.amber,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            themeProvider.isDarkMode ? 'Dark Mode' : 'Light Mode',
+                            style: TextStyle(
+                              color: AppColors.primaryText(context),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Tap to switch theme',
+                            style: TextStyle(
+                              color: AppColors.tertiaryText(context),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      width: 50,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        color: themeProvider.isDarkMode
+                            ? AppColors.green
+                            : Colors.amber,
+                      ),
+                      child: Stack(
+                        children: [
+                          AnimatedPositioned(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                            left: themeProvider.isDarkMode ? 24 : 2,
+                            top: 2,
+                            child: Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.2),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Dialogs dengan theme support
   void _showEditProfileDialog(BuildContext context) {
     final nameController = TextEditingController(text: _userData?['name']);
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
+        backgroundColor: AppColors.cardBackground(context),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
-          side: BorderSide(color: Colors.grey[800]!, width: 1),
+          side: BorderSide(color: AppColors.cardBorder(context), width: 1),
         ),
-        title: const Text(
+        title: Text(
           'Edit Profile',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+          style: TextStyle(
+            color: AppColors.primaryText(context),
+            fontWeight: FontWeight.w900,
+          ),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: AppColors.primaryText(context)),
               decoration: InputDecoration(
                 labelText: 'Name',
-                labelStyle: TextStyle(color: Colors.grey[600]),
+                labelStyle: TextStyle(color: AppColors.secondaryText(context)),
                 filled: true,
-                fillColor: Colors.grey[850],
+                fillColor: AppColors.inputBackground(context),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -692,7 +735,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             child: Text(
               'Cancel',
               style: TextStyle(
-                color: Colors.grey[500],
+                color: AppColors.secondaryText(context),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -721,8 +764,12 @@ class _ProfileScreenState extends State<ProfileScreen>
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
+              backgroundColor: AppColors.isDark(context) 
+                  ? Colors.white 
+                  : Colors.black,
+              foregroundColor: AppColors.isDark(context) 
+                  ? Colors.black 
+                  : Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -738,7 +785,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  // Set Goals Dialog
   void _showSetGoalsDialog(BuildContext context) {
     final dailyController = TextEditingController(
       text: '${_userData?['dailyGoal'] ?? 50}',
@@ -750,14 +796,17 @@ class _ProfileScreenState extends State<ProfileScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
+        backgroundColor: AppColors.cardBackground(context),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
-          side: BorderSide(color: Colors.grey[800]!, width: 1),
+          side: BorderSide(color: AppColors.cardBorder(context), width: 1),
         ),
-        title: const Text(
+        title: Text(
           'Set Goals',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+          style: TextStyle(
+            color: AppColors.primaryText(context),
+            fontWeight: FontWeight.w900,
+          ),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -765,12 +814,12 @@ class _ProfileScreenState extends State<ProfileScreen>
             TextField(
               controller: dailyController,
               keyboardType: TextInputType.number,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: AppColors.primaryText(context)),
               decoration: InputDecoration(
                 labelText: 'Daily Goal (push ups)',
-                labelStyle: TextStyle(color: Colors.grey[600]),
+                labelStyle: TextStyle(color: AppColors.secondaryText(context)),
                 filled: true,
-                fillColor: Colors.grey[850],
+                fillColor: AppColors.inputBackground(context),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -781,12 +830,12 @@ class _ProfileScreenState extends State<ProfileScreen>
             TextField(
               controller: weeklyController,
               keyboardType: TextInputType.number,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: AppColors.primaryText(context)),
               decoration: InputDecoration(
                 labelText: 'Weekly Goal (push ups)',
-                labelStyle: TextStyle(color: Colors.grey[600]),
+                labelStyle: TextStyle(color: AppColors.secondaryText(context)),
                 filled: true,
-                fillColor: Colors.grey[850],
+                fillColor: AppColors.inputBackground(context),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -801,7 +850,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             child: Text(
               'Cancel',
               style: TextStyle(
-                color: Colors.grey[500],
+                color: AppColors.secondaryText(context),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -831,8 +880,12 @@ class _ProfileScreenState extends State<ProfileScreen>
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
+              backgroundColor: AppColors.isDark(context) 
+                  ? Colors.white 
+                  : Colors.black,
+              foregroundColor: AppColors.isDark(context) 
+                  ? Colors.black 
+                  : Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -848,11 +901,10 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  // Show Statistics
   void _showStatistics(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.grey[900],
+      backgroundColor: AppColors.cardBackground(context),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -862,22 +914,23 @@ class _ProfileScreenState extends State<ProfileScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Statistics',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w900,
-                color: Colors.white,
+                color: AppColors.primaryText(context),
               ),
             ),
             const SizedBox(height: 24),
             _buildStatRow(
+              context,
               'Total Push Ups',
               '${_userData?['totalPushUps'] ?? 0}',
             ),
-            _buildStatRow('Daily Goal', '${_userData?['dailyGoal'] ?? 50}'),
-            _buildStatRow('Weekly Goal', '${_userData?['weeklyGoal'] ?? 300}'),
-            _buildStatRow('Achievements', '${_userData?['achievements'] ?? 0}'),
+            _buildStatRow(context, 'Daily Goal', '${_userData?['dailyGoal'] ?? 50}'),
+            _buildStatRow(context, 'Weekly Goal', '${_userData?['weeklyGoal'] ?? 300}'),
+            _buildStatRow(context, 'Achievements', '${_userData?['achievements'] ?? 0}'),
             const SizedBox(height: 24),
           ],
         ),
@@ -885,17 +938,23 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildStatRow(String label, String value) {
+  Widget _buildStatRow(BuildContext context, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 16)),
+          Text(
+            label,
+            style: TextStyle(
+              color: AppColors.secondaryText(context),
+              fontSize: 16,
+            ),
+          ),
           Text(
             value,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: AppColors.primaryText(context),
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -905,80 +964,40 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  // Show Profile Picture Options
-  void _showProfilePictureOptions(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.grey[900],
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library, color: Colors.white),
-              title: const Text(
-                'Choose from gallery',
-                style: TextStyle(color: Colors.white),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                // --- GANTI INI ---
-                _pickAndUploadImage(ImageSource.gallery);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.camera_alt, color: Colors.white),
-              title: const Text(
-                'Take photo',
-                style: TextStyle(color: Colors.white),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                // --- GANTI INI ---
-                _pickAndUploadImage(ImageSource.camera);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Show Notification Settings
   void _showNotificationSettings(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Notification settings coming soon!')),
     );
   }
 
-  // Show Privacy Settings
   void _showPrivacySettings(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Privacy settings coming soon!')),
     );
   }
 
-  // Logout Dialog
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
+        backgroundColor: AppColors.cardBackground(context),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
-          side: BorderSide(color: Colors.grey[800]!, width: 1),
+          side: BorderSide(color: AppColors.cardBorder(context), width: 1),
         ),
-        title: const Text(
+        title: Text(
           'Logout',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+          style: TextStyle(
+            color: AppColors.primaryText(context),
+            fontWeight: FontWeight.w900,
+          ),
         ),
         content: Text(
           'Are you sure you want to logout?',
-          style: TextStyle(color: Colors.grey[400], fontSize: 15),
+          style: TextStyle(
+            color: AppColors.secondaryText(context),
+            fontSize: 15,
+          ),
         ),
         actions: [
           TextButton(
@@ -986,7 +1005,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             child: Text(
               'Cancel',
               style: TextStyle(
-                color: Colors.grey[500],
+                color: AppColors.secondaryText(context),
                 fontWeight: FontWeight.w600,
               ),
             ),

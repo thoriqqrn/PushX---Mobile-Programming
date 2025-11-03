@@ -216,7 +216,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                           colors: [Colors.white, Colors.grey],
                         ).createShader(bounds),
                         child: const Text(
-                          'PUSH UP',
+                          'PUSHX',
                           style: TextStyle(
                             fontSize: 48,
                             fontWeight: FontWeight.w900,
