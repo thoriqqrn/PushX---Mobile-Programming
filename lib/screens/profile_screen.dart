@@ -333,6 +333,11 @@ class _ProfileScreenState extends State<ProfileScreen>
 
                     const SizedBox(height: 40),
 
+                    // Achievements Section
+                    _buildAchievementsSection(context),
+
+                    const SizedBox(height: 40),
+
                     // Menu Items
                     _buildPremiumMenuItem(
                       context,
@@ -365,10 +370,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                       },
                     ),
                     const SizedBox(height: 12),
-                    
+
                     // Theme Toggle - FITUR BARU!
                     _buildThemeToggle(context),
-                    
+
                     const SizedBox(height: 12),
                     _buildPremiumMenuItem(
                       context,
@@ -626,7 +631,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            themeProvider.isDarkMode ? 'Dark Mode' : 'Light Mode',
+                            themeProvider.isDarkMode
+                                ? 'Dark Mode'
+                                : 'Light Mode',
                             style: TextStyle(
                               color: AppColors.primaryText(context),
                               fontSize: 16,
@@ -764,11 +771,11 @@ class _ProfileScreenState extends State<ProfileScreen>
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.isDark(context) 
-                  ? Colors.white 
+              backgroundColor: AppColors.isDark(context)
+                  ? Colors.white
                   : Colors.black,
-              foregroundColor: AppColors.isDark(context) 
-                  ? Colors.black 
+              foregroundColor: AppColors.isDark(context)
+                  ? Colors.black
                   : Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
@@ -880,11 +887,11 @@ class _ProfileScreenState extends State<ProfileScreen>
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.isDark(context) 
-                  ? Colors.white 
+              backgroundColor: AppColors.isDark(context)
+                  ? Colors.white
                   : Colors.black,
-              foregroundColor: AppColors.isDark(context) 
-                  ? Colors.black 
+              foregroundColor: AppColors.isDark(context)
+                  ? Colors.black
                   : Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
@@ -928,9 +935,21 @@ class _ProfileScreenState extends State<ProfileScreen>
               'Total Push Ups',
               '${_userData?['totalPushUps'] ?? 0}',
             ),
-            _buildStatRow(context, 'Daily Goal', '${_userData?['dailyGoal'] ?? 50}'),
-            _buildStatRow(context, 'Weekly Goal', '${_userData?['weeklyGoal'] ?? 300}'),
-            _buildStatRow(context, 'Achievements', '${_userData?['achievements'] ?? 0}'),
+            _buildStatRow(
+              context,
+              'Daily Goal',
+              '${_userData?['dailyGoal'] ?? 50}',
+            ),
+            _buildStatRow(
+              context,
+              'Weekly Goal',
+              '${_userData?['weeklyGoal'] ?? 300}',
+            ),
+            _buildStatRow(
+              context,
+              'Achievements',
+              '${_userData?['achievements'] ?? 0}',
+            ),
             const SizedBox(height: 24),
           ],
         ),
@@ -1026,6 +1045,273 @@ class _ProfileScreenState extends State<ProfileScreen>
             child: const Text(
               'Logout',
               style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAchievementsSection(BuildContext context) {
+    final totalPushUps = _userData?['totalPushUps'] ?? 0;
+
+    final achievements = [
+      {
+        'icon': '🎯',
+        'title': 'First Step',
+        'description': 'Complete your first push-up',
+        'requirement': 1,
+        'unlocked': totalPushUps >= 1,
+      },
+      {
+        'icon': '💪',
+        'title': 'Getting Started',
+        'description': 'Complete 50 push-ups',
+        'requirement': 50,
+        'unlocked': totalPushUps >= 50,
+      },
+      {
+        'icon': '🔥',
+        'title': 'On Fire',
+        'description': 'Complete 100 push-ups',
+        'requirement': 100,
+        'unlocked': totalPushUps >= 100,
+      },
+      {
+        'icon': '⭐',
+        'title': 'Century Club',
+        'description': 'Complete 500 push-ups',
+        'requirement': 500,
+        'unlocked': totalPushUps >= 500,
+      },
+      {
+        'icon': '🏆',
+        'title': 'Push-Up Champion',
+        'description': 'Complete 1000 push-ups',
+        'requirement': 1000,
+        'unlocked': totalPushUps >= 1000,
+      },
+      {
+        'icon': '👑',
+        'title': 'Push-Up King',
+        'description': 'Complete 5000 push-ups',
+        'requirement': 5000,
+        'unlocked': totalPushUps >= 5000,
+      },
+    ];
+
+    final unlockedCount = achievements
+        .where((a) => a['unlocked'] as bool)
+        .length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Achievements',
+              style: TextStyle(
+                color: AppColors.primaryText(context),
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '$unlockedCount/${achievements.length}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 0.85,
+          ),
+          itemCount: achievements.length,
+          itemBuilder: (context, index) {
+            final achievement = achievements[index];
+            final unlocked = achievement['unlocked'] as bool;
+
+            return GestureDetector(
+              onTap: () {
+                _showAchievementDetail(context, achievement);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: unlocked
+                      ? const Color(0xFFFFD700).withOpacity(0.1)
+                      : AppColors.cardBackground(context),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: unlocked
+                        ? const Color(0xFFFFD700)
+                        : AppColors.cardBorder(context),
+                    width: unlocked ? 2 : 1,
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      achievement['icon'] as String,
+                      style: TextStyle(
+                        fontSize: 32,
+                        color: unlocked ? null : Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      achievement['title'] as String,
+                      style: TextStyle(
+                        color: unlocked
+                            ? AppColors.primaryText(context)
+                            : AppColors.secondaryText(context),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (!unlocked) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '${achievement['requirement']} needed',
+                        style: TextStyle(
+                          color: AppColors.tertiaryText(context),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  void _showAchievementDetail(
+    BuildContext context,
+    Map<String, dynamic> achievement,
+  ) {
+    final unlocked = achievement['unlocked'] as bool;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground(context),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        content: Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: unlocked
+                  ? const Color(0xFFFFD700)
+                  : AppColors.cardBorder(context),
+              width: unlocked ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: unlocked
+                      ? const LinearGradient(
+                          colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
+                        )
+                      : null,
+                  color: unlocked ? null : AppColors.inputBackground(context),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  achievement['icon'] as String,
+                  style: const TextStyle(fontSize: 48),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                achievement['title'] as String,
+                style: TextStyle(
+                  color: AppColors.primaryText(context),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                achievement['description'] as String,
+                style: TextStyle(
+                  color: AppColors.secondaryText(context),
+                  fontSize: 14,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: unlocked
+                      ? const Color(0xFFFFD700).withOpacity(0.2)
+                      : AppColors.inputBackground(context),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  unlocked
+                      ? '✅ Unlocked!'
+                      : 'Requirement: ${achievement['requirement']} push-ups',
+                  style: TextStyle(
+                    color: unlocked
+                        ? const Color(0xFFFFD700)
+                        : AppColors.secondaryText(context),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Close',
+              style: TextStyle(
+                color: AppColors.secondaryText(context),
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],

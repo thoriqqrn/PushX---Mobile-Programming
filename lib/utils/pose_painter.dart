@@ -5,11 +5,13 @@ class PosePainter extends CustomPainter {
   final Pose? pose;
   final Size imageSize;
   final bool isGoodForm;
+  final bool isFrontCamera;
 
   PosePainter({
     required this.pose,
     required this.imageSize,
     required this.isGoodForm,
+    this.isFrontCamera = true,
   });
 
   @override
@@ -17,111 +19,140 @@ class PosePainter extends CustomPainter {
     if (pose == null) return;
 
     final paint = Paint()
-      ..color = isGoodForm ? Colors.green : Colors.red
-      ..strokeWidth = 4.0
+      ..color = isGoodForm
+          ? Colors.green.withOpacity(0.8)
+          : Colors.red.withOpacity(0.8)
+      ..strokeWidth = 3.0
+      ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
     final pointPaint = Paint()
       ..color = isGoodForm ? Colors.green : Colors.red
-      ..strokeWidth = 8.0
       ..style = PaintingStyle.fill;
 
-    // Draw skeleton lines
+    final landmarks = pose!.landmarks;
+
+    // Draw body connections
+    // Arms
     _drawLine(
       canvas,
       paint,
-      pose!.landmarks[PoseLandmarkType.leftShoulder],
-      pose!.landmarks[PoseLandmarkType.rightShoulder],
+      landmarks[PoseLandmarkType.leftShoulder],
+      landmarks[PoseLandmarkType.leftElbow],
       size,
     );
     _drawLine(
       canvas,
       paint,
-      pose!.landmarks[PoseLandmarkType.leftShoulder],
-      pose!.landmarks[PoseLandmarkType.leftElbow],
+      landmarks[PoseLandmarkType.leftElbow],
+      landmarks[PoseLandmarkType.leftWrist],
       size,
     );
     _drawLine(
       canvas,
       paint,
-      pose!.landmarks[PoseLandmarkType.leftElbow],
-      pose!.landmarks[PoseLandmarkType.leftWrist],
+      landmarks[PoseLandmarkType.rightShoulder],
+      landmarks[PoseLandmarkType.rightElbow],
       size,
     );
     _drawLine(
       canvas,
       paint,
-      pose!.landmarks[PoseLandmarkType.rightShoulder],
-      pose!.landmarks[PoseLandmarkType.rightElbow],
-      size,
-    );
-    _drawLine(
-      canvas,
-      paint,
-      pose!.landmarks[PoseLandmarkType.rightElbow],
-      pose!.landmarks[PoseLandmarkType.rightWrist],
-      size,
-    );
-    _drawLine(
-      canvas,
-      paint,
-      pose!.landmarks[PoseLandmarkType.leftShoulder],
-      pose!.landmarks[PoseLandmarkType.leftHip],
-      size,
-    );
-    _drawLine(
-      canvas,
-      paint,
-      pose!.landmarks[PoseLandmarkType.rightShoulder],
-      pose!.landmarks[PoseLandmarkType.rightHip],
-      size,
-    );
-    _drawLine(
-      canvas,
-      paint,
-      pose!.landmarks[PoseLandmarkType.leftHip],
-      pose!.landmarks[PoseLandmarkType.rightHip],
-      size,
-    );
-    _drawLine(
-      canvas,
-      paint,
-      pose!.landmarks[PoseLandmarkType.leftHip],
-      pose!.landmarks[PoseLandmarkType.leftKnee],
-      size,
-    );
-    _drawLine(
-      canvas,
-      paint,
-      pose!.landmarks[PoseLandmarkType.leftKnee],
-      pose!.landmarks[PoseLandmarkType.leftAnkle],
-      size,
-    );
-    _drawLine(
-      canvas,
-      paint,
-      pose!.landmarks[PoseLandmarkType.rightHip],
-      pose!.landmarks[PoseLandmarkType.rightKnee],
-      size,
-    );
-    _drawLine(
-      canvas,
-      paint,
-      pose!.landmarks[PoseLandmarkType.rightKnee],
-      pose!.landmarks[PoseLandmarkType.rightAnkle],
+      landmarks[PoseLandmarkType.rightElbow],
+      landmarks[PoseLandmarkType.rightWrist],
       size,
     );
 
-    // Draw points
-    pose!.landmarks.forEach((type, landmark) {
+    // Shoulders
+    _drawLine(
+      canvas,
+      paint,
+      landmarks[PoseLandmarkType.leftShoulder],
+      landmarks[PoseLandmarkType.rightShoulder],
+      size,
+    );
+
+    // Torso
+    _drawLine(
+      canvas,
+      paint,
+      landmarks[PoseLandmarkType.leftShoulder],
+      landmarks[PoseLandmarkType.leftHip],
+      size,
+    );
+    _drawLine(
+      canvas,
+      paint,
+      landmarks[PoseLandmarkType.rightShoulder],
+      landmarks[PoseLandmarkType.rightHip],
+      size,
+    );
+
+    // Hips
+    _drawLine(
+      canvas,
+      paint,
+      landmarks[PoseLandmarkType.leftHip],
+      landmarks[PoseLandmarkType.rightHip],
+      size,
+    );
+
+    // Legs
+    _drawLine(
+      canvas,
+      paint,
+      landmarks[PoseLandmarkType.leftHip],
+      landmarks[PoseLandmarkType.leftKnee],
+      size,
+    );
+    _drawLine(
+      canvas,
+      paint,
+      landmarks[PoseLandmarkType.leftKnee],
+      landmarks[PoseLandmarkType.leftAnkle],
+      size,
+    );
+    _drawLine(
+      canvas,
+      paint,
+      landmarks[PoseLandmarkType.rightHip],
+      landmarks[PoseLandmarkType.rightKnee],
+      size,
+    );
+    _drawLine(
+      canvas,
+      paint,
+      landmarks[PoseLandmarkType.rightKnee],
+      landmarks[PoseLandmarkType.rightAnkle],
+      size,
+    );
+
+    // Draw key points only (not all landmarks)
+    final keyPoints = [
+      PoseLandmarkType.leftShoulder,
+      PoseLandmarkType.rightShoulder,
+      PoseLandmarkType.leftElbow,
+      PoseLandmarkType.rightElbow,
+      PoseLandmarkType.leftWrist,
+      PoseLandmarkType.rightWrist,
+      PoseLandmarkType.leftHip,
+      PoseLandmarkType.rightHip,
+      PoseLandmarkType.leftKnee,
+      PoseLandmarkType.rightKnee,
+      PoseLandmarkType.leftAnkle,
+      PoseLandmarkType.rightAnkle,
+    ];
+
+    for (var type in keyPoints) {
+      final landmark = landmarks[type];
       if (landmark != null) {
-        canvas.drawCircle(
-          _getOffset(landmark, size),
-          6,
-          pointPaint,
-        );
+        final offset = _getOffset(landmark, size);
+        // Draw white circle as border
+        canvas.drawCircle(offset, 5, Paint()..color = Colors.white);
+        // Draw colored center
+        canvas.drawCircle(offset, 3, pointPaint);
       }
-    });
+    }
   }
 
   void _drawLine(
@@ -132,23 +163,30 @@ class PosePainter extends CustomPainter {
     Size size,
   ) {
     if (start != null && end != null) {
-      canvas.drawLine(
-        _getOffset(start, size),
-        _getOffset(end, size),
-        paint,
-      );
+      canvas.drawLine(_getOffset(start, size), _getOffset(end, size), paint);
     }
   }
 
   Offset _getOffset(PoseLandmark landmark, Size size) {
-    return Offset(
-      landmark.x * size.width / imageSize.width,
-      landmark.y * size.height / imageSize.height,
-    );
+    // Scale coordinates properly
+    final double scaleX = size.width / imageSize.width;
+    final double scaleY = size.height / imageSize.height;
+
+    // Mirror X coordinate for front camera
+    final double x = isFrontCamera
+        ? size.width -
+              (landmark.x * scaleX) // Flip horizontally
+        : landmark.x * scaleX;
+
+    final double y = landmark.y * scaleY;
+
+    return Offset(x, y);
   }
 
   @override
   bool shouldRepaint(covariant PosePainter oldDelegate) {
-    return oldDelegate.pose != pose || oldDelegate.isGoodForm != isGoodForm;
+    return oldDelegate.pose != pose ||
+        oldDelegate.isGoodForm != isGoodForm ||
+        oldDelegate.isFrontCamera != isFrontCamera;
   }
 }

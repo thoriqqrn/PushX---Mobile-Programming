@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import '../services/pose_detector_service.dart';
 import '../utils/pose_painter.dart';
 import '../utils/app_colors.dart';
@@ -49,7 +52,7 @@ class PushupInstructionScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background(context),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             children: [
@@ -90,48 +93,46 @@ class PushupInstructionScreen extends StatelessWidget {
               const SizedBox(height: 40),
 
               // Illustration
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(30),
-                        decoration: BoxDecoration(
-                          color: AppColors.green.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.green.withOpacity(0.3),
-                            width: 2,
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.fitness_center_rounded,
-                          size: 80,
-                          color: AppColors.green,
-                        ),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(30),
+                    decoration: BoxDecoration(
+                      color: AppColors.green.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppColors.green.withOpacity(0.3),
+                        width: 2,
                       ),
-                      const SizedBox(height: 40),
-                      Text(
-                        'Get Ready!',
-                        style: TextStyle(
-                          color: AppColors.primaryText(context),
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Follow these steps for best results',
-                        style: TextStyle(
-                          color: AppColors.secondaryText(context),
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
+                    ),
+                    child: const Icon(
+                      Icons.fitness_center_rounded,
+                      size: 80,
+                      color: AppColors.green,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 40),
+                  Text(
+                    'Get Ready!',
+                    style: TextStyle(
+                      color: AppColors.primaryText(context),
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Follow these steps for best results',
+                    style: TextStyle(
+                      color: AppColors.secondaryText(context),
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
               ),
+
+              const SizedBox(height: 40),
 
               // Instructions
               Container(
@@ -160,28 +161,28 @@ class PushupInstructionScreen extends StatelessWidget {
                       context,
                       '1',
                       'Position your phone',
-                      'Place it 1-2 meters away, landscape mode',
+                      'Place it 1-2 meters away in LANDSCAPE mode',
                     ),
                     const SizedBox(height: 12),
                     _buildInstruction(
                       context,
                       '2',
-                      'Ensure full body visible',
-                      'Make sure your entire body is in frame',
+                      'Full body must be visible',
+                      'Make sure head to feet are in frame',
                     ),
                     const SizedBox(height: 12),
                     _buildInstruction(
                       context,
                       '3',
-                      'Good lighting',
-                      'Use bright room for better detection',
+                      'Good lighting required',
+                      'Use bright room for accurate detection',
                     ),
                     const SizedBox(height: 12),
                     _buildInstruction(
                       context,
                       '4',
                       'Maintain proper form',
-                      'Keep your body straight during push-ups',
+                      'Keep body and legs straight during push-ups',
                     ),
                   ],
                 ),
@@ -299,6 +300,7 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
   bool _isCameraInitialized = false;
 
   final PoseDetectorService _poseDetectorService = PoseDetectorService();
+  final FlutterTts _flutterTts = FlutterTts();
 
   Pose? _currentPose;
   PushUpStatus _currentStatus = PushUpStatus.notDetected;
@@ -311,10 +313,234 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  // Timer variables
+  Timer? _sessionTimer;
+  int _elapsedSeconds = 0;
+
   @override
   void initState() {
     super.initState();
+    // Set orientation to landscape when camera screen opens
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    _initializeTts();
     _initializeCamera();
+    _startSessionTimer();
+  }
+
+  Future<void> _initializeTts() async {
+    await _flutterTts.setLanguage("en-US");
+    await _flutterTts.setSpeechRate(
+      0.5,
+    ); // Kecepatan bicara (0.5 = lebih lambat)
+    await _flutterTts.setVolume(1.0); // Volume maksimal
+    await _flutterTts.setPitch(1.0); // Pitch normal
+  }
+
+  Future<void> _speak(String text) async {
+    await _flutterTts.speak(text);
+  }
+
+  void _startSessionTimer() {
+    _sessionTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          _elapsedSeconds++;
+        });
+      }
+    });
+  }
+
+  String _formatDuration(int seconds) {
+    final minutes = seconds ~/ 60;
+    final remainingSeconds = seconds % 60;
+    return '${minutes}m ${remainingSeconds}s';
+  }
+
+  Future<void> _finishSession() async {
+    try {
+      _sessionTimer?.cancel();
+      _flutterTts.stop();
+
+      final user = _auth.currentUser;
+      if (user == null) return;
+
+      final duration = _formatDuration(_elapsedSeconds);
+      final userDoc = _firestore.collection('users').doc(user.uid);
+
+      // Save session to Firestore
+      await userDoc.collection('sessions').add({
+        'pushUps': _pushUpCount,
+        'duration': duration,
+        'durationSeconds': _elapsedSeconds,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      // Show congratulations modal
+      if (!mounted) return;
+      _showCongratulationsModal(duration);
+    } catch (e) {
+      print('Error finishing session: $e');
+    }
+  }
+
+  void _showCongratulationsModal(String duration) {
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground(context),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(32),
+            topRight: Radius.circular(32),
+          ),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Trophy Icon
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFD700).withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.emoji_events_rounded,
+                  size: 36,
+                  color: Color(0xFFFFD700),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Title
+              Text(
+                'Awesome! 🎉',
+                style: TextStyle(
+                  color: AppColors.primaryText(context),
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+
+              // Message
+              Text(
+                'Kamu hebat sudah olahraga hari ini!',
+                style: TextStyle(
+                  color: AppColors.secondaryText(context),
+                  fontSize: 14,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+
+              // Stats Card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppColors.green.withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$_pushUpCount',
+                          style: const TextStyle(
+                            color: AppColors.green,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Push-ups',
+                          style: TextStyle(
+                            color: AppColors.secondaryText(context),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      width: 1,
+                      height: 32,
+                      color: AppColors.cardBorder(context),
+                    ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          duration,
+                          style: const TextStyle(
+                            color: AppColors.green,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Duration',
+                          style: TextStyle(
+                            color: AppColors.secondaryText(context),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Back to Home Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context); // Close modal
+                    Navigator.pop(context); // Go back to home
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.green,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Back to Home',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _initializeCamera() async {
@@ -369,33 +595,40 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
 
       setState(() {
         _currentPose = pose;
-        _currentStatus = status;
 
-        switch (status) {
-          case PushUpStatus.wrongForm:
-            _isGoodForm = false;
-            _feedbackMessage = '❌ Keep your body straight!';
-            break;
-          case PushUpStatus.up:
-            _isGoodForm = true;
-            _feedbackMessage = '⬆️ Push up!';
-            break;
-          case PushUpStatus.down:
-            _isGoodForm = true;
-            _feedbackMessage = '⬇️ Go down!';
+        // Only count push-up on transition from DOWN to UP
+        if (_previousStatus == PushUpStatus.down && status == PushUpStatus.up) {
+          _pushUpCount++;
+          _savePushUpToFirestore();
+          _isGoodForm = true;
+          _feedbackMessage = '✅ Good! Count: $_pushUpCount';
 
-            if (_previousStatus == PushUpStatus.up) {
-              _pushUpCount++;
-              _savePushUpToFirestore();
-            }
-            break;
-          case PushUpStatus.inProgress:
-            _isGoodForm = true;
-            _feedbackMessage = '💪 Keep going!';
-            break;
-          case PushUpStatus.notDetected:
-            _feedbackMessage = '🔍 Position yourself in frame';
-            break;
+          // Speak the count in English
+          _speak(_pushUpCount.toString());
+        } else {
+          _currentStatus = status;
+
+          switch (status) {
+            case PushUpStatus.wrongForm:
+              _isGoodForm = false;
+              _feedbackMessage = '❌ Keep your body straight!';
+              break;
+            case PushUpStatus.up:
+              _isGoodForm = true;
+              _feedbackMessage = '⬆️ Arms extended - Go down!';
+              break;
+            case PushUpStatus.down:
+              _isGoodForm = true;
+              _feedbackMessage = '⬇️ Good depth - Push up!';
+              break;
+            case PushUpStatus.inProgress:
+              _isGoodForm = true;
+              _feedbackMessage = '💪 Keep going!';
+              break;
+            case PushUpStatus.notDetected:
+              _feedbackMessage = '🔍 Position yourself in frame';
+              break;
+          }
         }
 
         _previousStatus = status;
@@ -416,9 +649,7 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
         final snapshot = await transaction.get(userDoc);
         if (snapshot.exists) {
           final currentTotal = snapshot.data()?['totalPushUps'] ?? 0;
-          transaction.update(userDoc, {
-            'totalPushUps': currentTotal + 1,
-          });
+          transaction.update(userDoc, {'totalPushUps': currentTotal + 1});
         }
       });
     } catch (e) {
@@ -428,8 +659,15 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
 
   @override
   void dispose() {
+    // Reset orientation back to portrait when leaving camera screen
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    _sessionTimer?.cancel();
     _cameraController?.dispose();
     _poseDetectorService.dispose();
+    _flutterTts.stop();
     super.dispose();
   }
 
@@ -440,41 +678,46 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
       body: _isCameraInitialized && _cameraController != null
           ? Stack(
               children: [
-                // FULLSCREEN Camera Preview
-                Positioned.fill(
-                  child: FittedBox(
-                    fit: BoxFit.cover,
-                    child: SizedBox(
-                      width: _cameraController!.value.previewSize!.height,
-                      height: _cameraController!.value.previewSize!.width,
-                      child: CameraPreview(_cameraController!),
-                    ),
+                // FULLSCREEN Camera Preview - Normal (no mirror)
+                Center(
+                  child: AspectRatio(
+                    aspectRatio: _cameraController!.value.aspectRatio,
+                    child: CameraPreview(_cameraController!),
                   ),
                 ),
 
-                // Pose Overlay
+                // Pose Overlay - Match camera preview size
                 if (_currentPose != null)
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: PosePainter(
-                        pose: _currentPose,
-                        imageSize: Size(
-                          _cameraController!.value.previewSize!.height,
-                          _cameraController!.value.previewSize!.width,
+                  Center(
+                    child: AspectRatio(
+                      aspectRatio: _cameraController!.value.aspectRatio,
+                      child: CustomPaint(
+                        painter: PosePainter(
+                          pose: _currentPose,
+                          imageSize: Size(
+                            _cameraController!.value.previewSize!.width,
+                            _cameraController!.value.previewSize!.height,
+                          ),
+                          isGoodForm: _isGoodForm,
+                          isFrontCamera:
+                              _cameraController!.description.lensDirection ==
+                              CameraLensDirection.front,
                         ),
-                        isGoodForm: _isGoodForm,
                       ),
                     ),
                   ),
 
-                // Top Bar
+                // Top Bar with Counter (Horizontal Layout)
                 Positioned(
                   top: 0,
                   left: 0,
                   right: 0,
                   child: SafeArea(
                     child: Container(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
@@ -488,6 +731,7 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          // Back Button
                           IconButton(
                             onPressed: widget.onBack,
                             icon: Container(
@@ -503,97 +747,163 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
                               ),
                             ),
                           ),
-                          Text(
-                            'Push-Up Counter',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black.withOpacity(0.5),
-                                  blurRadius: 10,
+
+                          // Title & Timer
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Push-Up Counter',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black.withOpacity(0.5),
+                                      blurRadius: 10,
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.8),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.timer_rounded,
+                                      color: Colors.white,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _formatDuration(_elapsedSeconds),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 48),
+
+                          // Counter Display & Finish Button
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Counter Display (Compact)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _isGoodForm
+                                      ? Colors.green.withOpacity(0.9)
+                                      : Colors.red.withOpacity(0.9),
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          (_isGoodForm
+                                                  ? Colors.green
+                                                  : Colors.red)
+                                              .withOpacity(0.5),
+                                      blurRadius: 10,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      'COUNT: ',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 1,
+                                      ),
+                                    ),
+                                    Text(
+                                      '$_pushUpCount',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w900,
+                                        height: 1,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              const SizedBox(width: 12),
+
+                              // Finish Button
+                              ElevatedButton.icon(
+                                onPressed: _finishSession,
+                                icon: const Icon(
+                                  Icons.stop_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                                label: const Text(
+                                  'Finish',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red.withOpacity(0.9),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  elevation: 0,
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
                   ),
                 ),
 
-                // Counter Display
+                // Feedback Message (Compact)
                 Positioned(
-                  top: 100,
-                  left: 0,
-                  right: 0,
+                  bottom: 80,
+                  left: 16,
+                  right: 16,
                   child: SafeArea(
                     child: Center(
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 40,
-                          vertical: 20,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _isGoodForm
-                              ? Colors.green.withOpacity(0.9)
-                              : Colors.red.withOpacity(0.9),
-                          borderRadius: BorderRadius.circular(30),
-                          boxShadow: [
-                            BoxShadow(
-                              color: (_isGoodForm ? Colors.green : Colors.red)
-                                  .withOpacity(0.5),
-                              blurRadius: 20,
-                              spreadRadius: 5,
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            const Text(
-                              'COUNT',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 2,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '$_pushUpCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 60,
-                                fontWeight: FontWeight.w900,
-                                height: 1,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Feedback Message
-                Positioned(
-                  bottom: 100,
-                  left: 0,
-                  right: 0,
-                  child: SafeArea(
-                    child: Center(
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 24),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 30,
-                          vertical: 15,
+                          horizontal: 20,
+                          vertical: 10,
                         ),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(25),
+                          borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                             color: _isGoodForm ? Colors.green : Colors.red,
                             width: 2,
@@ -603,19 +913,21 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
                           _feedbackMessage,
                           style: TextStyle(
                             color: _isGoodForm ? Colors.green : Colors.red,
-                            fontSize: 18,
+                            fontSize: 14,
                             fontWeight: FontWeight.bold,
                           ),
                           textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),
                   ),
                 ),
 
-                // Reset Button
+                // Reset Button (Compact)
                 Positioned(
-                  bottom: 30,
+                  bottom: 16,
                   left: 0,
                   right: 0,
                   child: SafeArea(
@@ -627,11 +939,11 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
                             _feedbackMessage = 'Counter reset! Start again';
                           });
                         },
-                        icon: const Icon(Icons.refresh_rounded),
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
                         label: const Text(
                           'Reset',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -639,11 +951,11 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
                           backgroundColor: Colors.white,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 30,
-                            vertical: 15,
+                            horizontal: 24,
+                            vertical: 10,
                           ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25),
+                            borderRadius: BorderRadius.circular(20),
                           ),
                         ),
                       ),
@@ -652,9 +964,7 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
                 ),
               ],
             )
-          : const Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            ),
+          : const Center(child: CircularProgressIndicator(color: Colors.white)),
     );
   }
 }

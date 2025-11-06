@@ -1,9 +1,9 @@
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:camera/camera.dart';
 import 'dart:ui'; // Untuk Size
-import 'dart:typed_data'; // Untuk ByteData, Uint8List
 import 'dart:math' as math; // Untuk atan2
-import 'package:flutter/foundation.dart' show WriteBuffer; // PENTING: Import ini!
+import 'package:flutter/foundation.dart'
+    show WriteBuffer; // PENTING: Import ini!
 
 class PoseDetectorService {
   final PoseDetector _poseDetector = PoseDetector(
@@ -55,8 +55,13 @@ class PoseDetectorService {
   }
 
   // Fungsi untuk menghitung sudut antara 3 titik
-  double getAngle(PoseLandmark firstPoint, PoseLandmark midPoint, PoseLandmark lastPoint) {
-    double result = math.atan2(lastPoint.y - midPoint.y, lastPoint.x - midPoint.x) -
+  double getAngle(
+    PoseLandmark firstPoint,
+    PoseLandmark midPoint,
+    PoseLandmark lastPoint,
+  ) {
+    double result =
+        math.atan2(lastPoint.y - midPoint.y, lastPoint.x - midPoint.x) -
         math.atan2(firstPoint.y - midPoint.y, firstPoint.x - midPoint.x);
     result = result * 180.0 / math.pi; // Convert to degrees
 
@@ -84,16 +89,25 @@ class PoseDetectorService {
     final rightHip = landmarks[PoseLandmarkType.rightHip];
     final leftKnee = landmarks[PoseLandmarkType.leftKnee];
     final rightKnee = landmarks[PoseLandmarkType.rightKnee];
+    final leftAnkle = landmarks[PoseLandmarkType.leftAnkle];
+    final rightAnkle = landmarks[PoseLandmarkType.rightAnkle];
 
-    if (leftShoulder == null || rightShoulder == null ||
-        leftElbow == null || rightElbow == null ||
-        leftWrist == null || rightWrist == null ||
-        leftHip == null || rightHip == null ||
-        leftKnee == null || rightKnee == null) {
+    if (leftShoulder == null ||
+        rightShoulder == null ||
+        leftElbow == null ||
+        rightElbow == null ||
+        leftWrist == null ||
+        rightWrist == null ||
+        leftHip == null ||
+        rightHip == null ||
+        leftKnee == null ||
+        rightKnee == null ||
+        leftAnkle == null ||
+        rightAnkle == null) {
       return PushUpStatus.notDetected;
     }
 
-    // Hitung sudut siku (elbow angle)
+    // Hitung sudut siku (elbow angle) - angle antara shoulder-elbow-wrist
     final leftElbowAngle = getAngle(leftShoulder, leftElbow, leftWrist);
     final rightElbowAngle = getAngle(rightShoulder, rightElbow, rightWrist);
     final avgElbowAngle = (leftElbowAngle + rightElbowAngle) / 2;
@@ -103,21 +117,36 @@ class PoseDetectorService {
     final rightBodyAngle = getAngle(rightShoulder, rightHip, rightKnee);
     final avgBodyAngle = (leftBodyAngle + rightBodyAngle) / 2;
 
-    // Kriteria push-up yang benar:
-    // 1. Tubuh harus lurus (body angle 160-180 derajat)
-    // 2. Siku menekuk (elbow angle < 90 untuk posisi bawah, > 160 untuk posisi atas)
+    // Hitung sudut knee (hip-knee-ankle) untuk memastikan kaki lurus
+    final leftKneeAngle = getAngle(leftHip, leftKnee, leftAnkle);
+    final rightKneeAngle = getAngle(rightHip, rightKnee, rightAnkle);
+    final avgKneeAngle = (leftKneeAngle + rightKneeAngle) / 2;
 
-    if (avgBodyAngle >= 160 && avgBodyAngle <= 180) {
-      // Tubuh lurus
-      if (avgElbowAngle < 90) {
-        return PushUpStatus.down; // Posisi bawah (turun)
-      } else if (avgElbowAngle > 160) {
-        return PushUpStatus.up; // Posisi atas (naik)
-      } else {
-        return PushUpStatus.inProgress;
-      }
-    } else {
+    // Debug print (opsional - hapus jika tidak diperlukan)
+    print(
+      'Elbow: ${avgElbowAngle.toStringAsFixed(1)}° | Body: ${avgBodyAngle.toStringAsFixed(1)}° | Knee: ${avgKneeAngle.toStringAsFixed(1)}°',
+    );
+
+    // Kriteria push-up yang benar:
+    // 1. Tubuh harus lurus (body angle 150-180 derajat)
+    // 2. Kaki lurus (knee angle > 160 derajat)
+    // 3. Siku menekuk untuk posisi bawah (< 100°) atau lurus untuk posisi atas (> 150°)
+
+    // Cek apakah posisi plank (tubuh dan kaki lurus)
+    bool isBodyStraight = avgBodyAngle >= 150 && avgBodyAngle <= 180;
+    bool isKneeStraight = avgKneeAngle >= 160;
+
+    if (!isBodyStraight || !isKneeStraight) {
       return PushUpStatus.wrongForm; // Form salah (tubuh tidak lurus)
+    }
+
+    // Jika body form benar, cek posisi berdasarkan sudut siku
+    if (avgElbowAngle < 100) {
+      return PushUpStatus.down; // Posisi bawah (siku menekuk)
+    } else if (avgElbowAngle > 150) {
+      return PushUpStatus.up; // Posisi atas (siku lurus)
+    } else {
+      return PushUpStatus.inProgress; // Sedang transisi
     }
   }
 
@@ -126,10 +155,4 @@ class PoseDetectorService {
   }
 }
 
-enum PushUpStatus {
-  notDetected,
-  wrongForm,
-  up,
-  down,
-  inProgress,
-}
+enum PushUpStatus { notDetected, wrongForm, up, down, inProgress }
