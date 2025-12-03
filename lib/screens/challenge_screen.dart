@@ -16,8 +16,8 @@ class _ChallengeScreenState extends State<ChallengeScreen>
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   TabController? _tabController;
-  String _selectedPeriod = 'Weekly';
-  final List<String> _periods = ['Daily', 'Weekly', 'Monthly'];
+  String _selectedPeriod = 'All Time';
+  final List<String> _periods = ['Daily', 'Weekly', 'Monthly', 'All Time'];
 
   @override
   void initState() {
@@ -201,8 +201,9 @@ class _ChallengeScreenState extends State<ChallengeScreen>
               child: StreamBuilder<QuerySnapshot>(
                 stream: _firestore
                     .collection('users')
+                    .where('totalPushUps', isGreaterThanOrEqualTo: 0)
                     .orderBy('totalPushUps', descending: true)
-                    .limit(50)
+                    .limit(100)
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
@@ -210,6 +211,85 @@ class _ChallengeScreenState extends State<ChallengeScreen>
                       child: CircularProgressIndicator(
                         color: AppColors.primaryText(context),
                       ),
+                    );
+                  }
+
+                  if (snapshot.hasError) {
+                    // Fallback: tampilkan current user saja jika permission denied
+                    return FutureBuilder<DocumentSnapshot>(
+                      future: _firestore
+                          .collection('users')
+                          .doc(_auth.currentUser?.uid)
+                          .get(),
+                      builder: (context, userSnapshot) {
+                        if (userSnapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.primaryText(context),
+                            ),
+                          );
+                        }
+
+                        if (!userSnapshot.hasData) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.cloud_off_rounded,
+                                  size: 64,
+                                  color: AppColors.secondaryText(context),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Unable to load leaderboard',
+                                  style: TextStyle(
+                                    color: AppColors.primaryText(context),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Check your internet connection',
+                                  style: TextStyle(
+                                    color: AppColors.secondaryText(context),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        // Tampilkan current user saja
+                        final userData =
+                            userSnapshot.data!.data() as Map<String, dynamic>?;
+                        return ListView(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          physics: const BouncingScrollPhysics(),
+                          children: [
+                            _buildLeaderboardItem(
+                              context,
+                              rank: 1,
+                              name: userData?['name'] ?? 'You',
+                              pushUps: userData?['totalPushUps'] ?? 0,
+                              isCurrentUser: true,
+                            ),
+                            const SizedBox(height: 16),
+                            Center(
+                              child: Text(
+                                'Other users hidden due to permissions',
+                                style: TextStyle(
+                                  color: AppColors.secondaryText(context),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     );
                   }
 
@@ -222,6 +302,7 @@ class _ChallengeScreenState extends State<ChallengeScreen>
 
                   return ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
+                    physics: const BouncingScrollPhysics(),
                     itemCount: users.length,
                     itemBuilder: (context, index) {
                       final userData =

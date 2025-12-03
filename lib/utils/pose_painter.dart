@@ -20,9 +20,10 @@ class PosePainter extends CustomPainter {
 
     final paint = Paint()
       ..color = isGoodForm
-          ? Colors.green.withOpacity(0.8)
-          : Colors.red.withOpacity(0.8)
-      ..strokeWidth = 3.0
+          ? Colors.green.withOpacity(0.9)
+          : Colors.red.withOpacity(0.9)
+      ..strokeWidth =
+          6.0 // LEBIH TEBAL dari 3.0
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
@@ -147,10 +148,14 @@ class PosePainter extends CustomPainter {
       final landmark = landmarks[type];
       if (landmark != null) {
         final offset = _getOffset(landmark, size);
-        // Draw white circle as border
-        canvas.drawCircle(offset, 5, Paint()..color = Colors.white);
+        // Draw white circle as border (LEBIH BESAR)
+        canvas.drawCircle(
+          offset,
+          10,
+          Paint()..color = Colors.white,
+        ); // 10 dari 5
         // Draw colored center
-        canvas.drawCircle(offset, 3, pointPaint);
+        canvas.drawCircle(offset, 7, pointPaint); // 7 dari 3
       }
     }
   }

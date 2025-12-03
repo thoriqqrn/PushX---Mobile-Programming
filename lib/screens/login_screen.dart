@@ -89,6 +89,56 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  Future<void> _forgotPassword() async {
+    final email = _emailController.text.trim();
+
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please enter your email address'),
+          backgroundColor: Colors.orange[400],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Password reset email sent! Check your inbox.'),
+            backgroundColor: Colors.green[400],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message ?? 'Failed to send reset email'),
+            backgroundColor: Colors.red[400],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -253,7 +303,27 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
 
-          const SizedBox(height: 40),
+          const SizedBox(height: 16),
+
+          // Forgot Password Link
+          Align(
+            alignment: Alignment.centerRight,
+            child: GestureDetector(
+              onTap: _forgotPassword,
+              child: Text(
+                'Forgot Password?',
+                style: TextStyle(
+                  color: Colors.grey[400],
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.underline,
+                  decorationColor: Colors.grey[400],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
 
           // Login Button
           AnimatedContainer(

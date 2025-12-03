@@ -313,6 +313,11 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  // Kalibrasi & Progress Bar
+  bool _isCalibrated = false;
+  bool _isCalibrating = false;
+  double _progressToDown = 0.0; // 0.0 - 1.0 (untuk progress bar)
+
   // Timer variables
   Timer? _sessionTimer;
   int _elapsedSeconds = 0;
@@ -591,13 +596,16 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
     );
 
     if (pose != null) {
-      final status = _poseDetectorService.checkPushUpForm(pose);
+      // Gunakan status yang sudah distabilkan dari buffer
+      final status = _poseDetectorService.getStabilizedStatus();
 
       setState(() {
         _currentPose = pose;
 
-        // Only count push-up on transition from DOWN to UP
-        if (_previousStatus == PushUpStatus.down && status == PushUpStatus.up) {
+        // Only count push-up on transition from DOWN to UP dengan anti-double count
+        if (_previousStatus == PushUpStatus.down &&
+            status == PushUpStatus.up &&
+            _poseDetectorService.canCount()) {
           _pushUpCount++;
           _savePushUpToFirestore();
           _isGoodForm = true;
