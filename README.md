@@ -17,16 +17,15 @@
 
 ## 📱 Demo Video
 
-<!-- Embed your simulation video here -->
 <div align="center">
 
-[https://github.com/user-attachments/assets/your-video-id-here](https://github.com/thoriqqrn/PushX---Mobile-Programming/blob/main/Dark%20Grey%20Bold%20Mobile%20Mockup%20New%20Reel%20Instagram%20Story.mp4)
+[![Watch Demo](https://img.youtube.com/vi/TAFmGElkfOU/maxresdefault.jpg)](https://youtube.com/shorts/TAFmGElkfOU)
 
 *Demo simulasi PushX dengan real-time pose detection*
 
-</div>
+**[▶️ Watch on YouTube Shorts](https://youtube.com/shorts/TAFmGElkfOU)**
 
-> **Note**: Replace `your-video-id-here` with your actual video file or YouTube embed link
+</div>
 
 ---
 
