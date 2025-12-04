@@ -20,7 +20,7 @@
 <!-- Embed your simulation video here -->
 <div align="center">
 
-https://github.com/user-attachments/assets/your-video-id-here
+[https://github.com/user-attachments/assets/your-video-id-here](https://github.com/thoriqqrn/PushX---Mobile-Programming/blob/main/Dark%20Grey%20Bold%20Mobile%20Mockup%20New%20Reel%20Instagram%20Story.mp4)
 
 *Demo simulasi PushX dengan real-time pose detection*
 
