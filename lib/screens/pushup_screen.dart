@@ -302,8 +302,10 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
   final PoseDetectorService _poseDetectorService = PoseDetectorService();
   final FlutterTts _flutterTts = FlutterTts();
 
+  // ✅ FPS Throttling - Batasi ke 10 FPS untuk MLKit
+  int _lastProcessTime = 0;
+
   Pose? _currentPose;
-  PushUpStatus _currentStatus = PushUpStatus.notDetected;
   PushUpStatus _previousStatus = PushUpStatus.notDetected;
 
   int _pushUpCount = 0;
@@ -312,11 +314,6 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  // Kalibrasi & Progress Bar
-  bool _isCalibrated = false;
-  bool _isCalibrating = false;
-  double _progressToDown = 0.0; // 0.0 - 1.0 (untuk progress bar)
 
   // Timer variables
   Timer? _sessionTimer;
@@ -572,7 +569,7 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
 
     _cameraController = CameraController(
       camera,
-      ResolutionPreset.high,
+      ResolutionPreset.medium,
       enableAudio: false,
       imageFormatGroup: ImageFormatGroup.nv21,
     );
@@ -587,6 +584,11 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
   }
 
   void _processCameraImage(CameraImage image) async {
+    // ✅ FPS Throttling - Process hanya setiap 100ms (10 FPS)
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastProcessTime < 100) return; // 10 FPS
+    _lastProcessTime = now;
+
     if (_isDetecting) return;
     _isDetecting = true;
 
@@ -614,8 +616,7 @@ class _PushupCameraScreenState extends State<PushupCameraScreen> {
           // Speak the count in English
           _speak(_pushUpCount.toString());
         } else {
-          _currentStatus = status;
-
+          // Update status without counting
           switch (status) {
             case PushUpStatus.wrongForm:
               _isGoodForm = false;

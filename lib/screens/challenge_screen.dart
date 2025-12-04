@@ -19,6 +19,109 @@ class _ChallengeScreenState extends State<ChallengeScreen>
   String _selectedPeriod = 'All Time';
   final List<String> _periods = ['Daily', 'Weekly', 'Monthly', 'All Time'];
 
+  // Get leaderboard stream based on selected period
+  Stream<QuerySnapshot> _getLeaderboardStream() {
+    final now = DateTime.now();
+    DateTime? startDate;
+
+    switch (_selectedPeriod) {
+      case 'Daily':
+        startDate = DateTime(now.year, now.month, now.day);
+        break;
+      case 'Weekly':
+        startDate = now.subtract(Duration(days: now.weekday - 1));
+        startDate = DateTime(startDate.year, startDate.month, startDate.day);
+        break;
+      case 'Monthly':
+        startDate = DateTime(now.year, now.month, 1);
+        break;
+      case 'All Time':
+      default:
+        startDate = null;
+    }
+
+    if (startDate == null) {
+      // All Time - use totalPushUps
+      return _firestore
+          .collection('users')
+          .where('totalPushUps', isGreaterThanOrEqualTo: 0)
+          .orderBy('totalPushUps', descending: true)
+          .limit(100)
+          .snapshots();
+    } else {
+      // Period-specific - aggregate from sessions
+      return _firestore
+          .collection('users')
+          .where('totalPushUps', isGreaterThanOrEqualTo: 0)
+          .orderBy('totalPushUps', descending: true)
+          .limit(100)
+          .snapshots();
+    }
+  }
+
+  // Calculate period-specific leaderboard from sessions
+  Future<List<Map<String, dynamic>>> _calculatePeriodLeaderboard(
+    List<QueryDocumentSnapshot> users,
+  ) async {
+    final now = DateTime.now();
+    DateTime startDate;
+
+    switch (_selectedPeriod) {
+      case 'Daily':
+        startDate = DateTime(now.year, now.month, now.day);
+        break;
+      case 'Weekly':
+        startDate = now.subtract(Duration(days: now.weekday - 1));
+        startDate = DateTime(startDate.year, startDate.month, startDate.day);
+        break;
+      case 'Monthly':
+        startDate = DateTime(now.year, now.month, 1);
+        break;
+      default:
+        startDate = DateTime(now.year, now.month, now.day);
+    }
+
+    final List<Map<String, dynamic>> leaderboard = [];
+
+    for (var userDoc in users) {
+      final userId = userDoc.id;
+      final userData = userDoc.data() as Map<String, dynamic>;
+
+      try {
+        final sessionsQuery = await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('sessions')
+            .where('timestamp', isGreaterThanOrEqualTo: startDate)
+            .get();
+
+        int totalPushUps = 0;
+        for (var session in sessionsQuery.docs) {
+          final sessionData = session.data();
+          totalPushUps += (sessionData['pushUps'] as int?) ?? 0;
+        }
+
+        if (totalPushUps > 0) {
+          leaderboard.add({
+            'userId': userId,
+            'name': userData['name'] ?? 'Unknown',
+            'pushUps': totalPushUps,
+          });
+        }
+      } catch (e) {
+        // Skip user if error
+        continue;
+      }
+    }
+
+    // Sort by pushUps descending
+    leaderboard.sort(
+      (a, b) => (b['pushUps'] as int).compareTo(a['pushUps'] as int),
+    );
+
+    return leaderboard;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -199,12 +302,7 @@ class _ChallengeScreenState extends State<ChallengeScreen>
             // Leaderboard
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                stream: _firestore
-                    .collection('users')
-                    .where('totalPushUps', isGreaterThanOrEqualTo: 0)
-                    .orderBy('totalPushUps', descending: true)
-                    .limit(100)
-                    .snapshots(),
+                stream: _getLeaderboardStream(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return Center(
@@ -300,6 +398,50 @@ class _ChallengeScreenState extends State<ChallengeScreen>
                   final users = snapshot.data!.docs;
                   final currentUserId = _auth.currentUser?.uid;
 
+                  // For period-specific, calculate from sessions
+                  if (_selectedPeriod != 'All Time') {
+                    return FutureBuilder<List<Map<String, dynamic>>>(
+                      future: _calculatePeriodLeaderboard(users),
+                      builder: (context, periodSnapshot) {
+                        if (periodSnapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.primaryText(context),
+                            ),
+                          );
+                        }
+
+                        if (!periodSnapshot.hasData ||
+                            periodSnapshot.data!.isEmpty) {
+                          return _buildEmptyState();
+                        }
+
+                        final rankedUsers = periodSnapshot.data!;
+                        return ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: rankedUsers.length,
+                          itemBuilder: (context, index) {
+                            final user = rankedUsers[index];
+                            final rank = index + 1;
+                            final isCurrentUser =
+                                user['userId'] == currentUserId;
+
+                            return _buildLeaderboardItem(
+                              context,
+                              rank: rank,
+                              name: user['name'] ?? 'Unknown',
+                              pushUps: user['pushUps'] ?? 0,
+                              isCurrentUser: isCurrentUser,
+                            );
+                          },
+                        );
+                      },
+                    );
+                  }
+
+                  // All Time - use totalPushUps directly
                   return ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     physics: const BouncingScrollPhysics(),

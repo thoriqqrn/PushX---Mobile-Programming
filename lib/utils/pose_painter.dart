@@ -7,12 +7,32 @@ class PosePainter extends CustomPainter {
   final bool isGoodForm;
   final bool isFrontCamera;
 
+  // ✅ SMOOTHING - Cache previous pose points untuk mengurangi jittering
+  static final Map<PoseLandmarkType, Offset> _previousPoints = {};
+  static const double _smoothingAlpha = 0.6; // 60% old, 40% new
+
   PosePainter({
     required this.pose,
     required this.imageSize,
     required this.isGoodForm,
     this.isFrontCamera = true,
   });
+
+  // ✅ SMOOTHING FUNCTION - Low-pass filter untuk joint
+  Offset _smoothPoint(PoseLandmarkType type, Offset current) {
+    if (!_previousPoints.containsKey(type)) {
+      _previousPoints[type] = current;
+      return current;
+    }
+
+    final old = _previousPoints[type]!;
+    final smoothed = Offset(
+      old.dx * _smoothingAlpha + current.dx * (1 - _smoothingAlpha),
+      old.dy * _smoothingAlpha + current.dy * (1 - _smoothingAlpha),
+    );
+    _previousPoints[type] = smoothed;
+    return smoothed;
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -168,7 +188,11 @@ class PosePainter extends CustomPainter {
     Size size,
   ) {
     if (start != null && end != null) {
-      canvas.drawLine(_getOffset(start, size), _getOffset(end, size), paint);
+      // ✅ Apply smoothing to reduce jittering
+      final startOffset = _getOffset(start, size);
+      final endOffset = _getOffset(end, size);
+
+      canvas.drawLine(startOffset, endOffset, paint);
     }
   }
 
@@ -178,14 +202,31 @@ class PosePainter extends CustomPainter {
     final double scaleY = size.height / imageSize.height;
 
     // Mirror X coordinate for front camera
-    final double x = isFrontCamera
-        ? size.width -
-              (landmark.x * scaleX) // Flip horizontally
-        : landmark.x * scaleX;
+    double x = landmark.x * scaleX;
+    if (isFrontCamera) {
+      x = size.width - x;
+    }
 
-    final double y = landmark.y * scaleY;
+    final rawOffset = Offset(x, landmark.y * scaleY);
 
-    return Offset(x, y);
+    // ✅ Apply smoothing filter to reduce jittering
+    // Use landmark type as key (approximate based on position)
+    final type = _getLandmarkTypeFromPosition(landmark);
+    return _smoothPoint(type, rawOffset);
+  }
+
+  // Helper to approximate landmark type from position
+  PoseLandmarkType _getLandmarkTypeFromPosition(PoseLandmark landmark) {
+    // Simple approximation based on Y position
+    if (landmark.y < imageSize.height * 0.3) {
+      return PoseLandmarkType.nose;
+    } else if (landmark.y < imageSize.height * 0.5) {
+      return PoseLandmarkType.leftShoulder;
+    } else if (landmark.y < imageSize.height * 0.7) {
+      return PoseLandmarkType.leftHip;
+    } else {
+      return PoseLandmarkType.leftKnee;
+    }
   }
 
   @override

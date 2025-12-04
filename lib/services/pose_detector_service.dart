@@ -9,51 +9,38 @@ class PoseDetectorService {
   final PoseDetector _poseDetector = PoseDetector(
     options: PoseDetectorOptions(
       mode: PoseDetectionMode.stream,
-      model: PoseDetectionModel.accurate,
+      model: PoseDetectionModel.base,
     ),
   );
 
   bool _isProcessing = false;
 
-  // HYBRID DETECTION - Y-distance + Angle (PALING AKURAT!)
+  // SIMPLE SHOULDER Y DETECTION - Super cepat!
   bool _isDown = false;
   DateTime? _lastCountTime;
   static const Duration _minTimeBetweenCounts = Duration(
-    milliseconds: 500,
+    milliseconds: 400,
   ); // Anti double count
 
-  // Smoothing filter (Moving Average)
+  // Baseline shoulder Y (posisi UP)
+  double? _baselineShoulderY;
   double _smoothedShoulderY = 0.0;
-  double _smoothedWristY = 0.0;
-  double _smoothedAngle = 180.0;
-  static const double _smoothingFactor = 0.3; // 30% new, 70% old
 
-  // Dynamic threshold based on torso length
-  double? _torsoLength;
-  double _thresholdDownDistance = 0.0;
-  double _thresholdUpDistance = 0.0;
+  // Threshold sederhana
+  static const double _downThreshold = 50.0; // Turun 50px = DOWN
+  static const double _upThreshold = 20.0; // Naik ke 20px dari baseline = UP
 
-  // Buffer untuk stabilisasi
+  // Buffer minimal
   final List<PushUpStatus> _statusBuffer = [];
-  static const int _bufferSize = 3; // 3 frame untuk stabilisasi
+  static const int _bufferSize = 2; // Lebih cepat
 
-  // Frame rate control (8-12 fps untuk konsistensi)
-  int _frameCounter = 0;
-  static const int _processEveryNFrames =
-      3; // Process setiap 3 frame (~10fps dari 30fps)
+  PushUpStatus? _lastDebugStatus;
 
   Future<Pose?> detectPose(CameraImage image, CameraDescription camera) async {
     if (_isProcessing) return null;
     _isProcessing = true;
 
     try {
-      // Frame rate control - process setiap N frame
-      _frameCounter++;
-      if (_frameCounter % _processEveryNFrames != 0) {
-        _isProcessing = false;
-        return null;
-      }
-
       final WriteBuffer allBytes = WriteBuffer();
       for (final Plane plane in image.planes) {
         allBytes.putUint8List(plane.bytes);
@@ -65,7 +52,10 @@ class PoseDetectorService {
         image.height.toDouble(),
       );
 
-      final InputImageRotation imageRotation = InputImageRotation.rotation0deg;
+      // Gunakan rotation dari kamera agar orientasi deteksi benar
+      final InputImageRotation imageRotation =
+          InputImageRotationValue.fromRawValue(camera.sensorOrientation) ??
+          InputImageRotation.rotation0deg;
       final InputImageFormat inputImageFormat = InputImageFormat.nv21;
 
       final inputImage = InputImage.fromBytes(
@@ -181,109 +171,60 @@ class PoseDetectorService {
     return landmark.likelihood > 0.5;
   }
 
-  // HYBRID DETECTION - Y-distance + Angle (PALING AKURAT!)
+  // SIMPLE SHOULDER Y DETECTION
   PushUpStatus checkPushUpForm(Pose pose) {
     final landmarks = pose.landmarks;
 
-    // Ambil landmark: shoulder, elbow, wrist, hip (LEFT & RIGHT)
+    // Ambil shoulder saja
     final leftShoulder = landmarks[PoseLandmarkType.leftShoulder];
     final rightShoulder = landmarks[PoseLandmarkType.rightShoulder];
-    final leftElbow = landmarks[PoseLandmarkType.leftElbow];
-    final leftWrist = landmarks[PoseLandmarkType.leftWrist];
-    final leftHip = landmarks[PoseLandmarkType.leftHip];
-    final rightHip = landmarks[PoseLandmarkType.rightHip];
 
-    // Validasi landmark terdeteksi
+    // Validasi
     if (!isLandmarkReliable(leftShoulder) ||
         !isLandmarkReliable(rightShoulder) ||
-        !isLandmarkReliable(leftElbow) ||
-        !isLandmarkReliable(leftWrist) ||
-        !isLandmarkReliable(leftHip) ||
-        !isLandmarkReliable(rightHip)) {
+        leftShoulder == null ||
+        rightShoulder == null) {
       return PushUpStatus.notDetected;
     }
 
-    // Hitung torso length (shoulder ke hip) - untuk dynamic threshold
-    final avgShoulderY = (leftShoulder!.y + rightShoulder!.y) / 2;
-    final avgHipY = (leftHip!.y + rightHip!.y) / 2;
+    // Rata-rata shoulder Y
+    final rawShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
 
-    if (_torsoLength == null) {
-      _torsoLength = (avgHipY - avgShoulderY).abs();
-      // Set threshold proporsional terhadap torso length
-      _thresholdDownDistance = _torsoLength! * 0.25; // 25% dari torso
-      _thresholdUpDistance = _torsoLength! * 0.45; // 45% dari torso
-      print(
-        '🎯 Torso length: ${_torsoLength!.toStringAsFixed(1)} | Down threshold: ${_thresholdDownDistance.toStringAsFixed(1)} | Up threshold: ${_thresholdUpDistance.toStringAsFixed(1)}',
-      );
-    }
-
-    // Smoothing filter untuk shoulder Y dan wrist Y
-    final rawShoulderY = leftShoulder.y;
-    final rawWristY = leftWrist!.y;
-
+    // Smoothing sederhana
     if (_smoothedShoulderY == 0.0) {
       _smoothedShoulderY = rawShoulderY;
-      _smoothedWristY = rawWristY;
+      _baselineShoulderY = rawShoulderY; // Set baseline awal
     } else {
-      // Moving average: smooth = (old * 0.7) + (new * 0.3)
-      _smoothedShoulderY =
-          (_smoothedShoulderY * (1 - _smoothingFactor)) +
-          (rawShoulderY * _smoothingFactor);
-      _smoothedWristY =
-          (_smoothedWristY * (1 - _smoothingFactor)) +
-          (rawWristY * _smoothingFactor);
+      _smoothedShoulderY = (_smoothedShoulderY * 0.7) + (rawShoulderY * 0.3);
     }
 
-    // Hitung Y-distance (shoulder ke wrist)
-    final yDistance = (_smoothedWristY - _smoothedShoulderY).abs();
-
-    // Hitung sudut siku (elbow angle)
-    final rawAngle = getAngle(leftShoulder, leftElbow!, leftWrist);
-
-    // Smoothing untuk angle
-    if (_smoothedAngle == 180.0) {
-      _smoothedAngle = rawAngle;
-    } else {
-      _smoothedAngle =
-          (_smoothedAngle * (1 - _smoothingFactor)) +
-          (rawAngle * _smoothingFactor);
+    // Set baseline (posisi UP tertinggi)
+    if (_baselineShoulderY == null ||
+        _smoothedShoulderY < _baselineShoulderY! - 5) {
+      _baselineShoulderY = _smoothedShoulderY;
     }
 
-    print(
-      '💪 Y-Dist: ${yDistance.toStringAsFixed(1)} | Angle: ${_smoothedAngle.toStringAsFixed(1)}° | isDown: $_isDown',
-    );
+    // Hitung jarak dari baseline
+    final distanceFromBaseline = _smoothedShoulderY - _baselineShoulderY!;
 
-    // ============ HYBRID DETECTION ============
-    // DOWN: Y-distance KECIL + Angle KECIL (siku menekuk, tangan dekat shoulder)
-    // UP: Y-distance BESAR + Angle BESAR (lengan lurus, tangan jauh dari shoulder)
-
-    if (!_isDown) {
-      // Cek kondisi DOWN: shoulder-wrist dekat DAN elbow angle < 90°
-      if (yDistance < _thresholdDownDistance && _smoothedAngle < 90) {
-        _isDown = true;
-        print(
-          '⬇️ DOWN detected! Y-dist: ${yDistance.toStringAsFixed(1)} | Angle: ${_smoothedAngle.toStringAsFixed(1)}°',
-        );
-        return PushUpStatus.down;
+    // Deteksi DOWN/UP
+    if (!_isDown && distanceFromBaseline > _downThreshold) {
+      _isDown = true;
+      if (_lastDebugStatus != PushUpStatus.down) {
+        print('⬇️ DOWN | Dist: ${distanceFromBaseline.toStringAsFixed(1)}');
+        _lastDebugStatus = PushUpStatus.down;
       }
-    } else {
-      // Cek kondisi UP: shoulder-wrist jauh DAN elbow angle > 150°
-      if (yDistance > _thresholdUpDistance && _smoothedAngle > 150) {
-        _isDown = false;
-        print(
-          '⬆️ UP detected! Y-dist: ${yDistance.toStringAsFixed(1)} | Angle: ${_smoothedAngle.toStringAsFixed(1)}°',
-        );
-        return PushUpStatus.up;
+      return PushUpStatus.down;
+    } else if (_isDown && distanceFromBaseline < _upThreshold) {
+      _isDown = false;
+      if (_lastDebugStatus != PushUpStatus.up) {
+        print('⬆️ UP | Dist: ${distanceFromBaseline.toStringAsFixed(1)}');
+        _lastDebugStatus = PushUpStatus.up;
       }
+      return PushUpStatus.up;
     }
 
-    // IN PROGRESS: Di antara threshold
-    if (_isDown) {
-      return PushUpStatus.inProgress;
-    }
-
-    // Default: UP position atau ready
-    return PushUpStatus.up;
+    return _isDown ? PushUpStatus.inProgress : PushUpStatus.up;
   }
 
   void dispose() {
